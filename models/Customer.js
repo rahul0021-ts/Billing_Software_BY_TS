@@ -11,7 +11,6 @@ const customerSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-customerSchema.index({ phone: 1 }, { unique: true });
 customerSchema.index({ name: "text" });
 
 module.exports = mongoose.model("Customer", customerSchema);
