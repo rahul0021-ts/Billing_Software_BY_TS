@@ -31,6 +31,13 @@ const productSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       required: [true, "Rates are required"],
     },
+    // Default quantity pre-filled in bill when item is added.
+    // Customer can still change it freely. e.g. 12 for towels, 6 for shirts.
+    defaultQty: {
+      type: Number,
+      default: 1,
+      min: 1,
+    },
     isActive: {
       type: Boolean,
       default: true,
