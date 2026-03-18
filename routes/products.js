@@ -85,13 +85,18 @@ router.post(
 // PUT /api/products/:id
 router.put("/:id", verifyToken, async (req, res, next) => {
   try {
+    // ✅ defaultQty now included
     const { name, nameHindi, sectionId, sizes, rates, defaultQty } = req.body;
 
     const updateData = {};
-    if (name !== undefined)       updateData.name       = String(name).trim();
-    if (nameHindi !== undefined)  updateData.nameHindi  = String(nameHindi).trim();
-    if (sectionId !== undefined)  updateData.sectionId  = sectionId;
-    if (defaultQty !== undefined) updateData.defaultQty = Math.max(1, Math.floor(Number(defaultQty) || 1));
+    if (name !== undefined)      updateData.name      = String(name).trim();
+    if (nameHindi !== undefined) updateData.nameHindi = String(nameHindi).trim();
+    if (sectionId !== undefined) updateData.sectionId = sectionId;
+
+    // ✅ Save defaultQty if provided
+    if (defaultQty !== undefined) {
+      updateData.defaultQty = Math.max(1, Math.floor(Number(defaultQty) || 1));
+    }
 
     if (sizes !== undefined) {
       const cleanSizes = sizes.map((s) => String(s).trim()).filter((s) => s.length > 0);
@@ -111,7 +116,11 @@ router.put("/:id", verifyToken, async (req, res, next) => {
       }
     }
 
-    const product = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    );
     if (!product) return res.status(404).json({ error: "NotFound", message: "Product not found" });
 
     return res.json({ success: true, data: product });
@@ -132,7 +141,11 @@ router.patch("/:id/toggle", verifyToken, async (req, res, next) => {
 // DELETE /api/products/:id (soft delete)
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    const product = await Product.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      { isActive: false },
+      { new: true }
+    );
     if (!product) return res.status(404).json({ error: "NotFound", message: "Product not found" });
     return res.json({ success: true, data: { message: "Product deactivated" } });
   } catch (err) { next(err); }
