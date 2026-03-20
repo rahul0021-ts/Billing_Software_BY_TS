@@ -95,7 +95,7 @@ router.put("/:id", verifyToken, async (req, res, next) => {
 
     // ✅ Save defaultQty if provided
     if (defaultQty !== undefined) {
-      updateData.defaultQty = Math.max(1, Math.floor(Number(defaultQty) || 1));
+      updateData.defaultQty = Math.max(1, Math.floor(Number(defaultQty)));
     }
 
     if (sizes !== undefined) {
