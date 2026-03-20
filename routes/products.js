@@ -19,12 +19,43 @@ router.get("/search", async (req, res, next) => {
   try {
     const q = req.query.q || "";
     if (!q.trim()) return res.json({ success: true, data: [] });
+
     const regex = new RegExp(q.trim(), "i");
+
+    // Check if query is number (for rate search)
+    const num = Number(q);
+    const isNumber = !isNaN(num);
+
     const products = await Product.find({
       isActive: true,
-      $or: [{ name: regex }, { nameHindi: regex }],
+      $or: [
+        { name: regex },
+        { nameHindi: regex },
+
+        // ✅ NEW: rate search
+        ...(isNumber
+          ? [
+              {
+                $expr: {
+                  $in: [
+                    num,
+                    {
+                      $map: {
+                        input: { $objectToArray: "$rates" },
+                        as: "r",
+                        in: "$$r.v"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          : [])
+      ]
     }).limit(30);
+
     return res.json({ success: true, data: products });
+
   } catch (err) { next(err); }
 });
 
