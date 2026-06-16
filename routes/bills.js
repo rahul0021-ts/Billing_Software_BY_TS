@@ -30,7 +30,15 @@ router.get("/", verifyToken, async (req, res, next) => {
 
     const [count, data] = await Promise.all([
       Bill.countDocuments(filter),
-      Bill.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    
+      Bill.find(filter)
+        .select(
+          "billNo customer total discount subtotal paymentMethod whatsappSent createdAt items"
+        )
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
     ]);
 
     return res.json({
@@ -52,24 +60,52 @@ router.get("/", verifyToken, async (req, res, next) => {
 router.get("/stats", verifyToken, async (req, res, next) => {
   try {
     const now = new Date();
-    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayMidnight = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+    const firstOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1
+    );
 
-    const [totalBills, todayBills, monthBills, revenueResult] = await Promise.all([
-      Bill.countDocuments({ isDeleted: false }),
-      Bill.countDocuments({ isDeleted: false, createdAt: { $gte: todayMidnight } }),
-      Bill.countDocuments({ isDeleted: false, createdAt: { $gte: firstOfMonth } }),
-      Bill.aggregate([
-        { $match: { isDeleted: false } },
-        { $group: { _id: null, totalRevenue: { $sum: "$total" } } },
-      ]),
-    ]);
+    const [totalBills, todayBills, monthBills, revenueResult] =
+      await Promise.all([
+        Bill.countDocuments({ isDeleted: false }),
+        Bill.countDocuments({
+          isDeleted: false,
+          createdAt: { $gte: todayMidnight },
+        }),
+        Bill.countDocuments({
+          isDeleted: false,
+          createdAt: { $gte: firstOfMonth },
+        }),
+        Bill.aggregate([
+          { $match: { isDeleted: false } },
+          {
+            $group: {
+              _id: null,
+              totalRevenue: { $sum: "$total" },
+            },
+          },
+        ]),
+      ]);
 
-    const totalRevenue = revenueResult.length > 0 ? revenueResult[0].totalRevenue : 0;
+    const totalRevenue =
+      revenueResult.length > 0
+        ? revenueResult[0].totalRevenue
+        : 0;
 
     return res.json({
       success: true,
-      data: { totalBills, todayBills, monthBills, totalRevenue },
+      data: {
+        totalBills,
+        todayBills,
+        monthBills,
+        totalRevenue,
+      },
     });
   } catch (err) {
     next(err);
@@ -79,11 +115,19 @@ router.get("/stats", verifyToken, async (req, res, next) => {
 // GET /api/bills/:id
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
-    const bill = await Bill.findById(req.params.id);
+    const bill = await Bill.findById(req.params.id).lean();
+
     if (!bill || bill.isDeleted) {
-      return res.status(404).json({ error: "NotFound", message: "Bill not found" });
+      return res.status(404).json({
+        error: "NotFound",
+        message: "Bill not found",
+      });
     }
-    return res.json({ success: true, data: bill });
+
+    return res.json({
+      success: true,
+      data: bill,
+    });
   } catch (err) {
     next(err);
   }
@@ -95,26 +139,48 @@ router.post("/", verifyToken, async (req, res, next) => {
     const { items, customer, discount, paymentMethod } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: "ValidationError", message: "At least one item is required" });
+      return res.status(400).json({
+        error: "ValidationError",
+        message: "At least one item is required",
+      });
     }
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
+
       if (!item.name) {
-        return res.status(400).json({ error: "ValidationError", message: `Item ${i + 1}: name is required` });
+        return res.status(400).json({
+          error: "ValidationError",
+          message: `Item ${i + 1}: name is required`,
+        });
       }
+
       if (!item.size) {
-        return res.status(400).json({ error: "ValidationError", message: `Item ${i + 1}: size is required` });
+        return res.status(400).json({
+          error: "ValidationError",
+          message: `Item ${i + 1}: size is required`,
+        });
       }
+
       if (!item.qty || item.qty < 1) {
-        return res.status(400).json({ error: "ValidationError", message: `Item ${i + 1}: qty must be at least 1` });
+        return res.status(400).json({
+          error: "ValidationError",
+          message: `Item ${i + 1}: qty must be at least 1`,
+        });
       }
+
       if (item.rate === undefined || item.rate < 0) {
-        return res.status(400).json({ error: "ValidationError", message: `Item ${i + 1}: rate must be 0 or more` });
+        return res.status(400).json({
+          error: "ValidationError",
+          message: `Item ${i + 1}: rate must be 0 or more`,
+        });
       }
     }
 
-    const [billNo, settings] = await Promise.all([Settings.nextBillNo(), Settings.getSingleton()]);
+    const [billNo, settings] = await Promise.all([
+      Settings.nextBillNo(),
+      Settings.getSingleton(),
+    ]);
 
     const billItems = items.map((item) => ({
       productId: item.productId || null,
@@ -129,10 +195,13 @@ router.post("/", verifyToken, async (req, res, next) => {
 
     const bill = await Bill.create({
       billNo,
+
       customer: {
         name: customer?.name || "Walk-in Customer",
         phone: customer?.phone || "",
+        city: customer?.city || "", // NEW
       },
+
       items: billItems,
       subtotal: 0,
       discount: discount || 0,
@@ -146,14 +215,27 @@ router.post("/", verifyToken, async (req, res, next) => {
       await Customer.findOneAndUpdate(
         { phone: customer.phone },
         {
-          $inc: { billCount: 1, totalSpend: bill.total },
-          $set: { name: customer.name || "Walk-in Customer", lastVisit: new Date() },
+          $inc: {
+            billCount: 1,
+            totalSpend: bill.total,
+          },
+          $set: {
+            name: customer.name || "Walk-in Customer",
+            city: customer.city || "", // NEW
+            lastVisit: new Date(),
+          },
         },
-        { upsert: true, new: true }
+        {
+          upsert: true,
+          new: true,
+        }
       );
     }
 
-    return res.status(201).json({ success: true, data: bill });
+    return res.status(201).json({
+      success: true,
+      data: bill,
+    });
   } catch (err) {
     next(err);
   }
@@ -162,11 +244,26 @@ router.post("/", verifyToken, async (req, res, next) => {
 // PATCH /api/bills/:id/whatsapp
 router.patch("/:id/whatsapp", verifyToken, async (req, res, next) => {
   try {
-    const bill = await Bill.findByIdAndUpdate(req.params.id, { whatsappSent: true }, { new: true });
+    const bill = await Bill.findByIdAndUpdate(
+      req.params.id,
+      { whatsappSent: true },
+      {
+        new: true,
+        lean: true,
+      }
+    );
+
     if (!bill) {
-      return res.status(404).json({ error: "NotFound", message: "Bill not found" });
+      return res.status(404).json({
+        error: "NotFound",
+        message: "Bill not found",
+      });
     }
-    return res.json({ success: true, data: bill });
+
+    return res.json({
+      success: true,
+      data: bill,
+    });
   } catch (err) {
     next(err);
   }
@@ -175,11 +272,28 @@ router.patch("/:id/whatsapp", verifyToken, async (req, res, next) => {
 // DELETE /api/bills/:id (soft delete)
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
-    const bill = await Bill.findByIdAndUpdate(req.params.id, { isDeleted: true }, { new: true });
+    const bill = await Bill.findByIdAndUpdate(
+      req.params.id,
+      { isDeleted: true },
+      {
+        new: true,
+        lean: true,
+      }
+    );
+
     if (!bill) {
-      return res.status(404).json({ error: "NotFound", message: "Bill not found" });
+      return res.status(404).json({
+        error: "NotFound",
+        message: "Bill not found",
+      });
     }
-    return res.json({ success: true, data: { message: "Bill deleted" } });
+
+    return res.json({
+      success: true,
+      data: {
+        message: "Bill deleted",
+      },
+    });
   } catch (err) {
     next(err);
   }

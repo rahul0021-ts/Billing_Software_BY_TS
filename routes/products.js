@@ -9,7 +9,9 @@ router.get("/", async (req, res, next) => {
   try {
     const filter = { isActive: true };
     if (req.query.sectionId) filter.sectionId = req.query.sectionId;
-    const products = await Product.find(filter).sort({ sectionId: 1, name: 1 });
+    const products = await Product.find(filter)
+  .sort({ sectionId: 1, name: 1 })
+  .lean();
     return res.json({ success: true, data: products });
   } catch (err) { next(err); }
 });
@@ -52,7 +54,7 @@ router.get("/search", async (req, res, next) => {
             ]
           : [])
       ]
-    }).limit(30);
+    }).limit(30).lean();
 
     return res.json({ success: true, data: products });
 
@@ -62,7 +64,7 @@ router.get("/search", async (req, res, next) => {
 // GET /api/products/:id
 router.get("/:id", async (req, res, next) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findById(req.params.id).lean();
     if (!product) return res.status(404).json({ error: "NotFound", message: "Product not found" });
     return res.json({ success: true, data: product });
   } catch (err) { next(err); }
@@ -150,7 +152,11 @@ router.put("/:id", verifyToken, async (req, res, next) => {
     const product = await Product.findByIdAndUpdate(
       req.params.id,
       updateData,
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+        lean: true,
+      }
     );
     if (!product) return res.status(404).json({ error: "NotFound", message: "Product not found" });
 
@@ -175,7 +181,10 @@ router.delete("/:id", verifyToken, async (req, res, next) => {
     const product = await Product.findByIdAndUpdate(
       req.params.id,
       { isActive: false },
-      { new: true }
+      {
+        new: true,
+        lean: true,
+      }
     );
     if (!product) return res.status(404).json({ error: "NotFound", message: "Product not found" });
     return res.json({ success: true, data: { message: "Product deactivated" } });

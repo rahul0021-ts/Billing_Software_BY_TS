@@ -21,10 +21,25 @@ const billItemSchema = new mongoose.Schema(
 const billSchema = new mongoose.Schema(
   {
     billNo: { type: String, required: true },
+
     customer: {
-      name: { type: String, default: "Walk-in Customer" },
-      phone: { type: String, default: "" },
+      name: {
+        type: String,
+        default: "Walk-in Customer",
+      },
+
+      phone: {
+        type: String,
+        default: "",
+      },
+
+      // NEW FIELD
+      city: {
+        type: String,
+        default: "",
+      },
     },
+
     items: {
       type: [billItemSchema],
       validate: {
@@ -34,33 +49,62 @@ const billSchema = new mongoose.Schema(
         message: "Bill must have at least one item",
       },
     },
+
     subtotal: { type: Number, required: true },
-    discount: { type: Number, default: 0 },
+
+    discount: {
+      type: Number,
+      default: 0,
+    },
+
     total: { type: Number, required: true },
-    shopName: { type: String, default: "" },
-    shopAddress: { type: String, default: "" },
+
+    shopName: {
+      type: String,
+      default: "",
+    },
+
+    shopAddress: {
+      type: String,
+      default: "",
+    },
+
     paymentMethod: {
       type: String,
       default: "cash",
     },
-    whatsappSent: { type: Boolean, default: false },
-    isDeleted: { type: Boolean, default: false },
+
+    whatsappSent: {
+      type: Boolean,
+      default: false,
+    },
+
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
 
-billSchema.index({ createdAt: -1 });
+billSchema.index({
+  isDeleted: 1,
+  createdAt: -1,
+});
 billSchema.index({ "customer.phone": 1 });
 billSchema.index({ billNo: 1 }, { unique: true });
 
 billSchema.pre("save", function (next) {
   let subtotal = 0;
+
   for (const item of this.items) {
     item.amount = Math.round(item.qty * item.rate);
     subtotal += item.amount;
   }
+
   this.subtotal = Math.round(subtotal);
   this.total = Math.round(this.subtotal - (this.discount || 0));
+
   next();
 });
 

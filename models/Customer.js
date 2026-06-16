@@ -4,6 +4,7 @@ const customerSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     phone: { type: String, required: true, unique: true, trim: true },
+    city: { type: String, default: "" },
     totalSpend: { type: Number, default: 0 },
     billCount: { type: Number, default: 0 },
     lastVisit: { type: Date, default: null },
