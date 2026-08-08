@@ -19,6 +19,8 @@ const app = express();
 
 const allowedOrigins = [
   process.env.FRONTEND_URL || "https://tsbillingfrontend.netlify.app",
+  "https://localhost",
+  "capacitor://localhost",
   "http://localhost:5173",
   "http://localhost:3000",
 ];

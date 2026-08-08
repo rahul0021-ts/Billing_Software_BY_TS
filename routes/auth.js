@@ -47,7 +47,7 @@ router.post(
   }
 );
 
-// POST /api/auth/register
+//POST /api/auth/register
 router.post(
   "/register",
   [
