@@ -262,6 +262,44 @@ router.post("/", verifyToken, async (req, res, next) => {
   }
 });
 
+// PATCH /api/bills/:id/payment
+// Records an additional payment against THIS specific bill — increases
+// its amountPaid (and so reduces its `remaining` virtual). Clamped so
+// amountPaid can never exceed the bill's own total, no matter how much
+// is sent. Returns the updated bill (with the new amountPaid/remaining)
+// so the frontend can update the row in place without a full refetch.
+router.patch("/:id/payment", verifyToken, async (req, res, next) => {
+  try {
+    const { amount } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        error: "ValidationError",
+        message: "Payment amount must be greater than 0",
+      });
+    }
+
+    const bill = await Bill.findById(req.params.id);
+
+    if (!bill || bill.isDeleted) {
+      return res.status(404).json({
+        error: "NotFound",
+        message: "Bill not found",
+      });
+    }
+
+    bill.amountPaid = Math.min(bill.total, (bill.amountPaid || 0) + Number(amount));
+    await bill.save();
+
+    return res.json({
+      success: true,
+      data: bill,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PATCH /api/bills/:id/whatsapp
 router.patch("/:id/whatsapp", verifyToken, async (req, res, next) => {
   try {
