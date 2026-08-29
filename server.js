@@ -12,6 +12,7 @@ const billRoutes = require("./routes/bills");
 const customerRoutes = require("./routes/customers");
 const whatsappRoutes = require("./routes/whatsapp");
 const settingsRoutes = require("./routes/settings");
+const paymentsRoutes = require("./routes/payments");
 
 connectDB();
 
@@ -57,6 +58,7 @@ app.use("/api/bills", billRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/payments", paymentsRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: "NotFound", message: `Route ${req.method} ${req.originalUrl} not found` });

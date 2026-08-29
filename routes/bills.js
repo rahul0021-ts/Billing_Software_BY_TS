@@ -33,7 +33,7 @@ router.get("/", verifyToken, async (req, res, next) => {
     
       Bill.find(filter)
         .select(
-          "billNo customer total discount subtotal paymentMethod whatsappSent createdAt items"
+          "billNo customer total discount subtotal amountPaid paymentMethod whatsappSent createdAt items"
         )
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -136,7 +136,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
 // POST /api/bills
 router.post("/", verifyToken, async (req, res, next) => {
   try {
-    const { items, customer, discount, paymentMethod } = req.body;
+    const { items, customer, discount, paymentMethod, amountPaid } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -193,19 +193,40 @@ router.post("/", verifyToken, async (req, res, next) => {
       amount: Math.round(item.qty * item.rate),
     }));
 
+    // Compute subtotal/total here (mirroring the pre-save hook's math)
+    // so we can decide the amountPaid default BEFORE creating the
+    // document — the hook itself runs too and will recompute the same
+    // numbers, so there's no conflict, just a small duplication to make
+    // the default decision possible.
+    const computedSubtotal = billItems.reduce((sum, i) => sum + i.amount, 0);
+    const computedTotal = Math.max(
+      0,
+      Math.round(computedSubtotal - (discount || 0))
+    );
+
+    // NEW: partial payment support. If the cashier didn't specify
+    // amountPaid, default to the full total (unchanged behaviour for
+    // anyone not using this feature). Clamped so it can never exceed
+    // the bill's own total or go negative.
+    const resolvedAmountPaid =
+      amountPaid !== undefined && amountPaid !== null
+        ? Math.max(0, Math.min(Number(amountPaid), computedTotal))
+        : computedTotal;
+
     const bill = await Bill.create({
       billNo,
 
       customer: {
         name: customer?.name || "Walk-in Customer",
         phone: customer?.phone || "",
-        city: customer?.city || "", // NEW
+        city: customer?.city || "",
       },
 
       items: billItems,
       subtotal: 0,
       discount: discount || 0,
       total: 0,
+      amountPaid: resolvedAmountPaid,
       shopName: settings.shopName,
       shopAddress: settings.shopAddress,
       paymentMethod: paymentMethod || "cash",
@@ -221,7 +242,7 @@ router.post("/", verifyToken, async (req, res, next) => {
           },
           $set: {
             name: customer.name || "Walk-in Customer",
-            city: customer.city || "", // NEW
+            city: customer.city || "",
             lastVisit: new Date(),
           },
         },

@@ -33,7 +33,6 @@ const billSchema = new mongoose.Schema(
         default: "",
       },
 
-      // NEW FIELD
       city: {
         type: String,
         default: "",
@@ -58,6 +57,17 @@ const billSchema = new mongoose.Schema(
     },
 
     total: { type: Number, required: true },
+
+    // NEW: how much was actually paid when this bill was created. Can be
+    // less than `total` for a partial/credit sale. Defaults to 0 here at
+    // the schema level as a safety net, but the bills route always sets
+    // this explicitly (to the full total if the cashier didn't specify a
+    // partial amount) before the document is created — see routes/bills.js.
+    amountPaid: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
 
     shopName: {
       type: String,
@@ -84,8 +94,21 @@ const billSchema = new mongoose.Schema(
       default: false,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
 );
+
+// NEW: how much of THIS bill is still unpaid. This is the per-bill
+// figure (e.g. for showing on a receipt: "Total 5000 - Paid 2000 -
+// Remaining 3000") — separate from a customer's overall running due
+// balance, which also factors in later Payment records made against
+// their account (see models/Payment.js + routes/payments.js).
+billSchema.virtual("remaining").get(function () {
+  return Math.max(0, Math.round(this.total - (this.amountPaid || 0)));
+});
 
 billSchema.index({
   isDeleted: 1,
